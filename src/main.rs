@@ -14,16 +14,27 @@ impl EventHandler for Handler {
         // !add [descriptor] by [timestring]
         if msg.content.starts_with("!do") {
             // fill w/ logic
-            let user_string = msg.content
-                .split(' ')
-                .collect();
+            let user_string = msg.content;
+
+
+            // note, replace all this with regex: (.+?)\s+(by|in)\s+(.+)
 
             // strings past user_string[0], iterate until user_string[n] = "by", rest of string arr for dating
             // for dating, switch on date types (minutes / hours / days / months / years)
 
-            let key_word_position: Result<String, None> = match user_string {
-                _ if user_string.contains("by") => user_string.iter().position(|&key| key == "by"),
-                _ if user_string.contains("in") => user_string.iter().position(|&key| key == "in"),
+            let string_tuple: Option<(String, String)> = match user_string {
+                _ if user_string.contains("by") => user_string.find(" by ")
+                                                    .map(|pos| {
+                                                        let(before, after) = user_string.split_at(pos);
+                                                        let date_part = &after[4..];
+                                                        (before.trim().to_string(), date_part.trim().to_string())
+                                                    }),
+                _ if user_string.contains("in") => user_string.find(" in ")
+                                                    .map(|pos| {
+                                                        let(before, after) = user_string.split_at(pos);
+                                                        let date_part = &after[4..];
+                                                        (before.trim().to_string(), date_part.trim().to_string())
+                                                    }),
                 _ => None
             };
 

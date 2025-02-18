@@ -65,8 +65,28 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     }
     .unwrap();
 
+    // need to make sure we're getting 'by' here
+    // prob just move to a method call for it
     let date_fix: Option<i64> = match &string_tuple.1.chars().filter(|c| *c == ' ').count() {
-        0 => todo!(), // temp
+        0 => match &string_tuple.1 {
+            // 2025-02-03 or 02-03
+            _ if (&string_tuple.1).contains("-") => {
+                match (&string_tuple.1)
+                    .chars()
+                    .filter(|dash| *dash == '-')
+                    .count()
+                {
+                    1 => todo!(),
+                    2 => todo!(),
+                    _ => panic!("Unexpected date repsonse"),
+                }
+                todo!();
+            }
+            _ if (&string_tuple.1).contains("pm") || (&string_tuple.1).contains("am") => {
+                todo!();
+            }
+            _ => todo!(),
+        },
         1 => match &string_tuple.1 {
             // the [5th], [6th], [7th] case
             _ if (&string_tuple.1).contains("the") => {
@@ -181,15 +201,17 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                     .unwrap()
                     .and_hms_opt(0, 0, 0)
                     .unwrap()
-                    .timestamp()
+                    .timestamp(),
                 )
             }
 
             // error! figure this case out later
-            _ => todo!()
+            _ => todo!(),
         },
-        _ => panic!("Unexpected return")
+        _ => panic!("Unexpected return"),
     };
+
+    // add case for 'in'
 
     // add the thing to the thing
 

@@ -15,10 +15,9 @@ use serenity::prelude::*;
 use serenity::all::standard::macros::group;
 use tracing::{error, info};
 
-use crate::commands::time::*;
 use crate::commands::meta::*;
 use crate::commands::owner::*;
-use crate::prefix::TODO_COMMAND; // this may be shite
+use crate::commands::time::prefix::*; // this isn't how you're supposed to do it, fix l8r
 
 struct Handler;
 

@@ -1,39 +1,50 @@
 #![allow(deprecated)]
 mod commands;
 
-use std::env;
 use std::collections::HashSet;
+use std::env;
 use std::sync::Arc;
 
+use serenity::all::standard::macros::group;
 use serenity::all::{Event, ResumedEvent, StandardFramework};
-use serenity::{async_trait, client};
 use serenity::framework::standard::Configuration;
-use serenity::http::Http;
 use serenity::gateway::ShardManager;
+use serenity::http::Http;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
-use serenity::all::standard::macros::group;
+use serenity::{async_trait, client};
 use tracing::{error, info};
 
-use crate::commands::time::*;
+use sqlx::{Pool, Sqlite};
+use tracing_subscriber::registry::Data;
+
 use crate::commands::meta::*;
 use crate::commands::owner::*;
+use crate::commands::time::prefix::*; // this isn't how you're supposed to do it, fix l8r
 
 struct Handler;
 
 pub struct ShardManagerContainer;
+pub struct DatabaseContainer;
 
 impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<ShardManager>;
 }
 
+impl TypeMapKey for DatabaseContainer {
+    type Value = Pool<Sqlite>;
+}
+
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _:Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        let data = ctx.data.read().await;
+        let db = data.get::<DatabaseContainer>().expect("Database not found");
+
         println!("{} connected!", ready.user.name);
     }
 
-    async fn resume(&self, _:Context, _: ResumedEvent) {
+    async fn resume(&self, _: Context, _: ResumedEvent) {
         info!("Resumed");
     }
 }
@@ -48,9 +59,23 @@ async fn main() {
     dotenv::dotenv().expect("Failed loading environment!");
     tracing_subscriber::fmt::init();
 
-    let token = env::var("DISCORD_KEY")
-        .expect("Expected token in env.");
+    let token = env::var("DISCORD_KEY").expect("Expected token in env.");
     let http = Http::new(&token);
+
+    let database = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(3)
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename("database.sqlite")
+                .create_if_missing(true),
+        )
+        .await
+        .expect("Couldn't connect to db");
+
+    sqlx::migrate!("./migrations")
+        .run(&database)
+        .await
+        .expect("Couldn't do db migration");
 
     let (owners, _bot_id) = match http.get_current_application_info().await {
         Ok(info) => {
@@ -59,17 +84,15 @@ async fn main() {
                 owners.insert(owner.id);
             }
             (owners, info.id)
-        },
-        Err(msg) => panic!("App info error: {:?}", msg)
+        }
+        Err(msg) => panic!("App info error: {:?}", msg),
     };
 
     let framework = StandardFramework::new().group(&GENERAL_GROUP);
-    framework.configure(Configuration::new()
-                                    .owners(owners)
-                                    .prefix("!"));
+    framework.configure(Configuration::new().owners(owners).prefix("!"));
 
-    let intents = GatewayIntents::MESSAGE_CONTENT 
-        | GatewayIntents::DIRECT_MESSAGES 
+    let intents = GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::GUILD_MESSAGES;
 
     // might have to undo that addressing
@@ -81,6 +104,7 @@ async fn main() {
 
     {
         let mut data = client.data.write().await;
+        data.insert::<DatabaseContainer>(database.clone());
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
     }
 

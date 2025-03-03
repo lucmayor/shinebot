@@ -4,18 +4,34 @@ use serenity::framework::standard::CommandResult;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
-use chrono::{
-    Datelike, Duration, Month, NaiveDate, TimeDelta, Utc, Weekday,
-};
+use chrono::{Datelike, Duration, Month, NaiveDate, TimeDelta, Utc, Weekday};
+
+use crate::DatabaseContainer;
 
 use regex::{Captures, Regex};
 
 struct FixDate(i64);
 
+trait MonthValidation {
+    fn is_month(&self) -> bool;
+}
+
+impl MonthValidation for &str {
+    fn is_month(&self) -> bool {
+        match self.parse::<Month>() {
+            Ok(_val) => true,
+            Err(_e) => false,
+        }
+    }
+}
+
 #[command]
 #[aliases("todo")]
 pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let input = &msg.content;
+
+    let data = ctx.data.read().await;
+    let db = data.get::<DatabaseContainer>().expect("Couldn't find db");
 
     let reg: Regex = Regex::new(r"(.?\!do)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
     let captures: Captures<'_> = reg.captures(&input).unwrap();
@@ -112,19 +128,23 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                                 Err(_) => panic!("Invalid weekday"),
                             };
 
-                            (current_date + {
-                                if casing[0] == "next" {
-                                    Duration::from(TimeDelta::days(7))
-                                } else {
-                                    Duration::from(TimeDelta::days(0))
+                            (current_date
+                                + {
+                                    if casing[0] == "next" {
+                                        Duration::from(TimeDelta::days(7))
+                                    } else {
+                                        Duration::from(TimeDelta::days(0))
+                                    }
                                 }
-                            } + Duration::from(TimeDelta::days(weekday_dfm.into())))
-                                .timestamp()
+                                + Duration::from(TimeDelta::days(weekday_dfm.into())))
+                            .timestamp()
                         }
-                        _ if matches!(casing[0].parse::<Month>(), Ok(mon)) => {
+                        mon_str if mon_str.is_month() => {
                             // idk if this passes.
                             let day = (&casing[1][..2]).parse::<i64>().expect("Invalid date");
-                            let mon = casing[0].parse::<Month>().expect("Month errored randomly");
+                            let mon = mon_str
+                                .parse::<Month>()
+                                .expect("Month parse failed after passing test");
 
                             FixDate::from(build_date_str(
                                 {
@@ -146,13 +166,21 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                         _ => panic!("Invalid input for date!"),
                     }
                 }
-                _ => todo!(),
+                _ => panic!("Invalid input within date string"),
             }
         }
         _ => {
             panic!("Invalid operand for process.")
         }
     };
+
+    add_item(captures.get(1), calc_timestamp, db, msg.author.id.get());
+
+    msg.reply(
+        &ctx.http,
+        format!("Added {:?} to your to-do list!", calc_timestamp),
+    )
+    .await?;
 
     Ok(())
 }
@@ -198,4 +226,19 @@ fn is_after(mon: u32, day: u32, current: NaiveDate) -> bool {
 
 fn build_date_str(year: i32, month: i32, day: i32) -> String {
     year.to_string() + "-" + &month.to_string() + "-" + &day.to_string()
+}
+
+async fn add_item(task: &str, timestamp: i64, db: DatabaseContainer, user_id: u64) -> () {
+    sqlx::query!(
+        "INSERT INTO tasks VALUES (uid=?, desc=?, timestamp=?)",
+        user_id,
+        task,
+        timestamp
+    )
+    .execute(db)
+    .await?;
+
+    // add logic for tcp server ping to alert rebuilder
+
+    ()
 }

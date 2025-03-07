@@ -12,6 +12,14 @@
 	!do shit by 2025-02-02
 	!do shit by 02-02
 
+	!do shit by the 4th
+	!do shit by monday
+
+	the
+	this
+	next
+	[month]
+
 	# casing
 	[date]-[date]-[None] // date
 	[date]-[date]-[date] // date

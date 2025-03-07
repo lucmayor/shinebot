@@ -5,7 +5,18 @@ authors = ["luc mayor"]
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.96"
 chrono = "0.4.39"
+dotenv = "0.15.0"
+humantime = "2.1.0"
+phf = { version = "0.11.3", features = ["macros"] }
 regex = "1.11.1"
-serenity = "0.12.4"
+sqlx = {version = "0.8.3", features = [ "sqlite", "runtime-tokio", "tls-native-tls", "offline" ]}
 tokio = {version = "1.43.0", features = ["full"]}
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+
+[dependencies.serenity]
+version = "0.12.4"
+git = "https://github.com/serenity-rs/serenity.git"
+features = ["framework", "standard_framework"]

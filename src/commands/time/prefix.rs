@@ -5,6 +5,7 @@ use serenity::model::channel::Message;
 use serenity::prelude::*;
 
 use chrono::{Datelike, Duration, Month, NaiveDate, TimeDelta, Utc, Weekday};
+use sqlx::{Pool, Sqlite};
 
 use crate::DatabaseContainer;
 
@@ -175,7 +176,9 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    add_item(captures.get(1), calc_timestamp, db, msg.author.id.get());
+    let task_name = captures.get(1).unwrap().as_str();
+
+    add_item(task_name, calc_timestamp, db, msg.author.id.get());
 
     msg.reply(
         &ctx.http,
@@ -229,7 +232,7 @@ fn build_date_str(year: i32, month: i32, day: i32) -> String {
     year.to_string() + "-" + &month.to_string() + "-" + &day.to_string()
 }
 
-async fn add_item(task: &str, timestamp: i64, db: DatabaseContainer, user_id: u64) -> () {
+async fn add_item(task: &str, timestamp: i64, db: Pool<Sqlite>, user_id: u64) -> () {
     sqlx::query!(
         "INSERT INTO tasks VALUES (uid=?, desc=?, timestamp=?)",
         user_id,
@@ -237,7 +240,7 @@ async fn add_item(task: &str, timestamp: i64, db: DatabaseContainer, user_id: u6
         timestamp
     )
     .execute(db)
-    .await?;
+    .await;
 
     // add logic for tcp server ping to alert rebuilder
 

@@ -3,10 +3,11 @@
 // it dont work here yet but im getting the framework up : )
 // https://github.com/lucmayor/busses
 
-use serenity::framework::standard::macros::command;
-use serenity::framework::standard::CommandResult;
-use serenity::model::channel::Message;
-use serenity::prelude::*;
+use serenity::{
+    framework::standard::{macros::command, Args, CommandResult},
+    model::channel::Message,
+    prelude::*,
+};
 
 // imports from busses project
 use chrono::{DateTime, Duration, Local, Timelike};
@@ -86,7 +87,6 @@ impl ToString for Times {
     }
 }
 
-// TODO: change datatype to handle blue busses on busses_wanted
 struct BusStop {
     alias: String,
     stop_number: i32,
@@ -111,7 +111,7 @@ impl ToString for BusType {
         } else if let BusType::String(val) = self {
             val.clone()
         } else {
-            panic!("unable to convert")
+            panic!("Unable to convert bus")
         }
     }
 }
@@ -167,7 +167,7 @@ impl std::str::FromStr for StopCollection {
 
                 temp
             }
-            _ => panic!("Unimplemented bus case")
+            _ => panic!("Unimplemented bus case"),
         };
 
         Ok(StopCollection {
@@ -260,27 +260,29 @@ impl fmt::Display for LocError {
 
 #[command]
 #[aliases("bus", "busses")]
-pub async fn bus(ctx: &Context, msg: &Message) {
-    let input = &msg.content;
+pub async fn bus(ctx: &Context, msg: &Message, mut args: Args) {
     let data = ctx.data.read().await;
+    
+    // input parse. not an issue as any choice shouldn't have a spaced response
+    let input = args.single::<String>().expect("Couldn't parse args of cmd");
 
     match validate().await {
         Ok(stat) => match stat.status.get("value").unwrap().as_str() {
             "esp-1" | "esp-2" | "esp-3" => panic!("Presently not in service"),
             _ => {
-                // add proper query for input later
-                tokio::task::spawn_blocking(move || get_results(&input));
+                tokio::task::spawn_blocking(move || get_results(input));
             }
         },
         Err(e) => panic!("Error in first read-in: {:?}", e),
     }
 }
 
+// validate api status
 async fn validate() -> Result<Status, reqwest::Error> {
     dotenv().ok();
 
     let mut param: HashMap<&str, &str> = HashMap::new();
-    let api_key = &std::env::var("api_key").expect("api key of doom");
+    let api_key = &std::env::var("WT_API").expect("Couldn't get WT API key from env");
     param.insert("api-key", api_key);
 
     let client = reqwest::Client::new();
@@ -294,6 +296,7 @@ async fn validate() -> Result<Status, reqwest::Error> {
         .await
 }
 
+// get busses
 fn get_results(input: String) -> Result<char, Box<dyn std::error::Error>> {
     dotenv().ok();
     let blocking_client = reqwest::blocking::Client::new();
@@ -315,13 +318,14 @@ fn get_results(input: String) -> Result<char, Box<dyn std::error::Error>> {
         let mut param: HashMap<&str, &str> = HashMap::new();
         let api_key = &std::env::var("api_key").expect("api key of doom");
         param.insert("api-key", api_key);
-        param.insert("max-results-per-route", "3"); // seems to max out at 3
+        param.insert("max-results-per-route", "3"); // seems to max out at 3 no matter what
 
         let routes = &stops.busses_wanted.to_string();
         if routes.len() != 0 {
             param.insert("route", routes);
         }
 
+        // build response
         let url = format!(
             "https://api.winnipegtransit.com/v3/stops/{0}/schedule.json",
             stops.stop_number
@@ -333,6 +337,7 @@ fn get_results(input: String) -> Result<char, Box<dyn std::error::Error>> {
             .text()
             .expect("Couldn't get response from WT");
 
+        // parse response
         let v: Value = serde_json::from_str(&res)?;
         let routes = match v
             .get("stop-schedule")
@@ -403,4 +408,17 @@ fn get_results(input: String) -> Result<char, Box<dyn std::error::Error>> {
     }
 
     Ok('c')
+}
+
+fn group_busses(bus_list: Vec<Bus>) -> Vec<(String, Times)> {
+    let mut out_list: Vec<(String, Times)> = Vec::new();
+
+    for item in bus_list {
+        for times in item.times {
+            out_list.push((item.alias.clone(), times))
+        }
+    }
+
+    out_list.sort_by_key(|k| k.1);
+    out_list
 }

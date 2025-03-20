@@ -38,8 +38,9 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let operand: &str = captures.get(2).unwrap().as_str();
     let date: &str = captures.get(3).unwrap().as_str();
 
-    let current_date = Utc::now(); // impl the user
+    let current_date = Utc::now(); // implement the user
                                    // this will need to be changed for implementation of timezone db
+                                   // presently checks for UTC
 
     let calc_timestamp: i64 = match operand {
         "in" => {

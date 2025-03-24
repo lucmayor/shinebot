@@ -260,7 +260,7 @@ impl fmt::Display for LocError {
 
 #[command]
 #[aliases("bus", "busses")]
-pub async fn bus(ctx: &Context, msg: &Message, mut args: Args) {
+pub async fn bus(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let data = ctx.data.read().await;
     
     // input parse. not an issue as any choice shouldn't have a spaced response

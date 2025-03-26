@@ -7,7 +7,7 @@ use serenity::prelude::*;
 use anyhow::Result;
 
 use chrono::{Datelike, Duration, Month, NaiveDate, TimeDelta, Utc, Weekday};
-use sqlx::{Pool, Sqlite};
+use sqlx::{sqlite::SqliteQueryResult, Pool, Sqlite};
 
 use crate::DatabaseContainer;
 
@@ -32,14 +32,17 @@ impl MonthValidation for &str {
 #[aliases("todo")]
 pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let input = &msg.content;
+    dbg!(input);
 
     let data = ctx.data.read().await;
     let db = data.get::<DatabaseContainer>().expect("Couldn't find db");
 
-    let reg: Regex = Regex::new(r"(.?\!do)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
+    let reg: Regex = Regex::new(r"(.?\!todo)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
     let captures: Captures<'_> = reg.captures(&input).unwrap();
-    let operand: &str = captures.get(2).unwrap().as_str();
-    let date: &str = captures.get(3).unwrap().as_str();
+    let operand: &str = captures.get(3).unwrap().as_str();
+    let date: &str = captures.get(4).unwrap().as_str();
+
+    dbg!(format!("operand {} date {}", operand, date));
 
     let current_date = Utc::now(); // implement the user
                                    // this will need to be changed for implementation of timezone db
@@ -48,14 +51,14 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let calc_timestamp: i64 = match operand {
         "in" => {
             let dur: u64 = humantime::parse_duration(date).unwrap().as_secs();
-            println!("Duration: {:?}", dur);
+            dbg!(format!("Duration: {:?}", dur));
 
             // construct timestamp
             let time = (current_date + TimeDelta::try_seconds(dur.try_into().unwrap()).unwrap())
                 .timestamp();
             dbg!(time);
 
-            todo!()
+            time
         }
         "by" => {
             match date.chars().filter(|c| *c == ' ').count() {
@@ -64,22 +67,22 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                     let date_captures: Captures<'_> = date_reg.captures(&date).unwrap();
 
                     // case
-                    match date_captures.get(0).unwrap().as_str().chars().count() {
+                    match date_captures.get(1).unwrap().as_str().chars().count() {
                         4 => {
                             let year: i32 = date_captures
-                                .get(0)
-                                .unwrap()
-                                .as_str()
-                                .parse::<i32>()
-                                .unwrap();
-                            let month: i32 = date_captures
                                 .get(1)
                                 .unwrap()
                                 .as_str()
                                 .parse::<i32>()
                                 .unwrap();
-                            let day: i32 = date_captures
+                            let month: i32 = date_captures
                                 .get(2)
+                                .unwrap()
+                                .as_str()
+                                .parse::<i32>()
+                                .unwrap();
+                            let day: i32 = date_captures
+                                .get(3)
                                 .unwrap()
                                 .as_str()
                                 .parse::<i32>()
@@ -89,13 +92,13 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                         }
                         2 => {
                             let month: i32 = date_captures
-                                .get(0)
+                                .get(1)
                                 .unwrap()
                                 .as_str()
                                 .parse::<i32>()
                                 .unwrap();
                             let day: i32 = date_captures
-                                .get(1)
+                                .get(2)
                                 .unwrap()
                                 .as_str()
                                 .parse::<i32>()
@@ -178,20 +181,28 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    let task_name = captures.get(1).unwrap().as_str();
+    let task_name = captures.get(2).unwrap().as_str();
 
     match add_item(task_name, calc_timestamp, db.clone(), msg.author.id.get()).await {
         Ok(_) => {
             msg.reply(
                 &ctx.http,
-                format!("Added ({:?}, {:?}) to your to-do list!", task_name, calc_timestamp)
-            ).await?;
-        },
+                format!(
+                    "Added ({:?}, <t:{:?}>) to your to-do list!",
+                    task_name, calc_timestamp
+                ),
+            )
+            .await?;
+        }
         Err(e) => {
             msg.reply(
                 &ctx.http,
-                format!("Error adding ({:?}, {:?}) to your to-do list: {:?}", task_name, calc_timestamp, e)
-            ).await?;
+                format!(
+                    "Error adding ({:?}, <t:{:?}>) to your to-do list: {:?}",
+                    task_name, calc_timestamp, e
+                ),
+            )
+            .await?;
         }
     };
 
@@ -247,15 +258,21 @@ fn build_date_str(year: i32, month: i32, day: i32) -> String {
     year.to_string() + "-" + &month.to_string() + "-" + &day.to_string()
 }
 
-async fn add_item(task: &str, timestamp: i64, db: Pool<Sqlite>, user_id: u64) -> Result<()> {
-    sqlx::query!("INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES ('$1', '$2', '$3');")
-        .bind(user_id as i64)
-        .bind(task)
-        .bind(timestamp)
-        .execute(&db)
-        .await?;
+async fn add_item(
+    task: &str,
+    timestamp: i64,
+    db: Pool<Sqlite>,
+    user_id: u64,
+) -> Result<SqliteQueryResult, sqlx::Error> {
+    let conv = user_id as i64;
+    sqlx::query!(
+        r#"INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES (?1, ?2, ?3);"#,
+        conv,
+        task,
+        timestamp
+    )
+    .execute(&db)
+    .await
 
     // add logic for tcp server ping to alert rebuilder
-
-    Ok(())
 }

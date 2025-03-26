@@ -4,9 +4,7 @@
 // https://github.com/lucmayor/busses
 
 use serenity::{
-    framework::standard::{macros::command, Args, CommandResult},
-    model::channel::Message,
-    prelude::*,
+    all::CreateEmbed, framework::standard::{macros::command, Args, CommandResult}, model::channel::Message, prelude::*
 };
 
 // imports from busses project
@@ -15,6 +13,7 @@ use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, fmt, str::FromStr};
+use anyhow::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Status {
@@ -271,6 +270,12 @@ pub async fn bus(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
             "esp-1" | "esp-2" | "esp-3" => panic!("Presently not in service"),
             _ => {
                 tokio::task::spawn_blocking(move || get_results(input));
+
+                let mut response = CreateEmbed::new();
+
+                response.title(format!(""));
+
+                Ok(())
             }
         },
         Err(e) => panic!("Error in first read-in: {:?}", e),
@@ -297,7 +302,7 @@ async fn validate() -> Result<Status, reqwest::Error> {
 }
 
 // get busses
-fn get_results(input: String) -> Result<char, Box<dyn std::error::Error>> {
+fn get_results(input: String) -> Result<char> {
     dotenv().ok();
     let blocking_client = reqwest::blocking::Client::new();
 

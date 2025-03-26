@@ -59,7 +59,7 @@ async fn main() {
     dotenv::dotenv().expect("Failed loading environment!");
     tracing_subscriber::fmt::init();
 
-    let token = env::var("DISCORD_KEY").expect("Expected token in env.");
+    let token = env::var("DISCORD_TOKEN").expect("Expected token in env.");
     let http = Http::new(&token);
 
     let database = sqlx::sqlite::SqlitePoolOptions::new()

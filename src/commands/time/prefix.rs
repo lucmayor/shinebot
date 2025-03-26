@@ -4,7 +4,10 @@ use serenity::framework::standard::CommandResult;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
 
+use anyhow::Result;
+
 use chrono::{Datelike, Duration, Month, NaiveDate, TimeDelta, Utc, Weekday};
+use sqlx::{Pool, Sqlite};
 
 use crate::DatabaseContainer;
 
@@ -38,8 +41,9 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let operand: &str = captures.get(2).unwrap().as_str();
     let date: &str = captures.get(3).unwrap().as_str();
 
-    let current_date = Utc::now(); // impl the user
+    let current_date = Utc::now(); // implement the user
                                    // this will need to be changed for implementation of timezone db
+                                   // presently checks for UTC
 
     let calc_timestamp: i64 = match operand {
         "in" => {
@@ -174,13 +178,22 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    add_item(captures.get(1), calc_timestamp, db, msg.author.id.get());
+    let task_name = captures.get(1).unwrap().as_str();
 
-    msg.reply(
-        &ctx.http,
-        format!("Added {:?} to your to-do list!", calc_timestamp),
-    )
-    .await?;
+    match add_item(task_name, calc_timestamp, db.clone(), msg.author.id.get()).await {
+        Ok(_) => {
+            msg.reply(
+                &ctx.http,
+                format!("Added ({:?}, {:?}) to your to-do list!", task_name, calc_timestamp)
+            ).await?;
+        },
+        Err(e) => {
+            msg.reply(
+                &ctx.http,
+                format!("Error adding ({:?}, {:?}) to your to-do list: {:?}", task_name, calc_timestamp, e)
+            ).await?;
+        }
+    };
 
     Ok(())
 }
@@ -221,24 +234,28 @@ impl From<String> for FixDate {
 }
 
 fn is_after(mon: u32, day: u32, current: NaiveDate) -> bool {
-    mon >= current.month() && day > current.day()
+    if mon == current.month() {
+        day > current.day()
+    } else if mon > current.month() {
+        true
+    } else {
+        false
+    }
 }
 
 fn build_date_str(year: i32, month: i32, day: i32) -> String {
     year.to_string() + "-" + &month.to_string() + "-" + &day.to_string()
 }
 
-async fn add_item(task: &str, timestamp: i64, db: DatabaseContainer, user_id: u64) -> () {
-    sqlx::query!(
-        "INSERT INTO tasks VALUES (uid=?, desc=?, timestamp=?)",
-        user_id,
-        task,
-        timestamp
-    )
-    .execute(db)
-    .await?;
+async fn add_item(task: &str, timestamp: i64, db: Pool<Sqlite>, user_id: u64) -> Result<()> {
+    sqlx::query!("INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES ('$1', '$2', '$3');")
+        .bind(user_id as i64)
+        .bind(task)
+        .bind(timestamp)
+        .execute(&db)
+        .await?;
 
     // add logic for tcp server ping to alert rebuilder
 
-    ()
+    Ok(())
 }

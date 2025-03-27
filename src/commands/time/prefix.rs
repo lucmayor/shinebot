@@ -13,6 +13,8 @@ use crate::DatabaseContainer;
 
 use regex::{Captures, Regex};
 
+use text2num::{Language, replace_numbers_in_text};
+
 struct FixDate(i64);
 
 trait MonthValidation {
@@ -29,7 +31,7 @@ impl MonthValidation for &str {
 }
 
 #[command]
-#[aliases("todo")]
+#[aliases("todo", "do")]
 pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let input = &msg.content;
     dbg!(input);
@@ -37,7 +39,7 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let db = data.get::<DatabaseContainer>().expect("Couldn't find db");
 
-    let reg: Regex = Regex::new(r"(.?\!todo)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
+    let reg: Regex = Regex::new(r"(.?\!todo|!do)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
     let captures: Captures<'_> = reg.captures(&input).unwrap();
     let operand: &str = captures.get(3).unwrap().as_str();
     let date: &str = captures.get(4).unwrap().as_str();
@@ -50,7 +52,17 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
 
     let calc_timestamp: i64 = match operand {
         "in" => {
-            let dur: u64 = humantime::parse_duration(date).unwrap().as_secs();
+            let dur: u64 = match humantime::parse_duration(date) {
+                Ok(res) => res.as_secs(),
+                Err(_) => {
+                    let en = Language::english();
+                    let str: &str = &replace_numbers_in_text(date, &en, 10.0);
+                    dbg!(str);
+                    
+                    humantime::parse_duration(str).unwrap().as_secs()
+
+                }
+            };
             dbg!(format!("Duration: {:?}", dur));
 
             // construct timestamp

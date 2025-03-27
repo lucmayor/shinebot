@@ -50,3 +50,6 @@
 	minutes / hours / days / weeks / months / years
 ```
 
+bugs:
+
+- i cant type numbers, must be int numeric state

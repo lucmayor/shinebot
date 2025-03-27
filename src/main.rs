@@ -12,7 +12,7 @@ use serenity::gateway::ShardManager;
 use serenity::http::Http;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
-use serenity::{async_trait, client};
+use serenity::async_trait;
 use tracing::{error, info};
 
 use sqlx::{Pool, Sqlite};

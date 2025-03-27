@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES (?1, ?2, ?3);",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "9064a0c7eab7a591d6c1a7790aa42f84fbff543ea132cbe61be12b1a9f5e2257"
+}

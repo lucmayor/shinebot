@@ -265,6 +265,7 @@ async fn add_item(
     user_id: u64,
 ) -> Result<SqliteQueryResult, sqlx::Error> {
     let conv = user_id as i64;
+    // this error is sometimes raised but it's just rust-analyzer tripping out
     sqlx::query!(
         r#"INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES (?1, ?2, ?3);"#,
         conv,

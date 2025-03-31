@@ -3,17 +3,22 @@
 // it dont work here yet but im getting the framework up : )
 // https://github.com/lucmayor/busses
 
+#[allow(unreachable_code)]
 use serenity::{
-    all::CreateEmbed, framework::standard::{macros::command, Args, CommandResult}, model::channel::Message, prelude::*
+    all::{CreateEmbed, CreateMessage},
+    framework::standard::{macros::command, Args, CommandResult},
+    model::{channel::Message, Colour, Timestamp as TimestampSer},
+    prelude::*,
 };
 
 // imports from busses project
+use anyhow::Result;
 use chrono::{DateTime, Duration, Local, Timelike};
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, fmt, str::FromStr};
-use anyhow::Result;
+use tokio::task;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Status {
@@ -260,8 +265,6 @@ impl fmt::Display for LocError {
 #[command]
 #[aliases("bus", "busses")]
 pub async fn bus(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let data = ctx.data.read().await;
-    
     // input parse. not an issue as any choice shouldn't have a spaced response
     let input = args.single::<String>().expect("Couldn't parse args of cmd");
 
@@ -269,17 +272,22 @@ pub async fn bus(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         Ok(stat) => match stat.status.get("value").unwrap().as_str() {
             "esp-1" | "esp-2" | "esp-3" => panic!("Presently not in service"),
             _ => {
-                tokio::task::spawn_blocking(move || get_results(input));
+                let e = match task::spawn_blocking(move || get_results(input)).await? {
+                    Ok(e) => e,
+                    Err(er) => {
+                        msg.reply(&ctx.http, format!("Can't build response: {:?}", er)).await?;
+                        panic!("Couldn't build response")
+                    }
+                };
 
-                let mut response = CreateEmbed::new();
-
-                response.title(format!(""));
-
-                Ok(())
+                let builder = CreateMessage::new().embed(e);
+                msg.channel_id.send_message(&ctx.http, builder).await?;
             }
         },
         Err(e) => panic!("Error in first read-in: {:?}", e),
     }
+
+    Ok(())
 }
 
 // validate api status
@@ -302,13 +310,9 @@ async fn validate() -> Result<Status, reqwest::Error> {
 }
 
 // get busses
-fn get_results(input: String) -> Result<char> {
+fn get_results(input: String) -> Result<CreateEmbed> {
     dotenv().ok();
     let blocking_client = reqwest::blocking::Client::new();
-
-    if input == "q" {
-        return Ok('q');
-    }
 
     let to_search = match StopCollection::from_str(&input) {
         Ok(stops) => stops,
@@ -321,7 +325,7 @@ fn get_results(input: String) -> Result<char> {
 
     for stops in to_search.stops {
         let mut param: HashMap<&str, &str> = HashMap::new();
-        let api_key = &std::env::var("api_key").expect("api key of doom");
+        let api_key = &std::env::var("WT_API").expect("api key of doom");
         param.insert("api-key", api_key);
         param.insert("max-results-per-route", "3"); // seems to max out at 3 no matter what
 
@@ -407,12 +411,7 @@ fn get_results(input: String) -> Result<char> {
         }
     }
 
-    let bus: Vec<(String, Times)> = group_busses(final_list);
-    for item in bus {
-        println!("{0}: {1}", item.0, item.1.to_string());
-    }
-
-    Ok('c')
+    Ok(build_response(final_list, to_search.alias))
 }
 
 fn group_busses(bus_list: Vec<Bus>) -> Vec<(String, Times)> {
@@ -426,4 +425,19 @@ fn group_busses(bus_list: Vec<Bus>) -> Vec<(String, Times)> {
 
     out_list.sort_by_key(|k| k.1);
     out_list
+}
+
+fn build_response(busses: Vec<Bus>, alias: String) -> CreateEmbed {
+    let mut final_list: Vec<String> = Vec::new();
+    for item in group_busses(busses) {
+        final_list.push(format!("{:?}: {:?}", item.0, item.1.to_string()))
+    }
+
+    let embed = CreateEmbed::new()
+        .timestamp(TimestampSer::now())
+        .title("bus schedule:")
+        .colour(Colour::ROSEWATER)
+        .field(format!("route: {:?}", alias), final_list.join("\n"), false);
+
+    embed
 }

@@ -19,6 +19,7 @@ use sqlx::{Pool, Sqlite};
 
 use crate::commands::meta::*;
 use crate::commands::owner::*;
+use crate::commands::bus::prefix::*;
 use crate::commands::time::prefix::*; // this isn't how you're supposed to do it, fix l8r
 
 struct Handler;
@@ -49,7 +50,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(todo, ping, quit)]
+#[commands(todo, bus, ping, quit)]
 struct General;
 
 // have to specify flavor for whatever reason

@@ -1,10 +1,8 @@
-use core::time;
-
 #[allow(unreachable_code)]
 use serenity::framework::standard::macros::command;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
-use serenity::{all::Command, framework::standard::CommandResult};
+use serenity::framework::standard::CommandResult;
 
 use anyhow::Result;
 
@@ -234,7 +232,7 @@ async fn single_date_case(curr: DateTime<Utc>, date: u32) -> i64 {
 async fn weekday(curr: DateTime<Utc>, week: &str, next: bool) -> i64 {
     let weekday_dfm: u32 = match week.trim().parse::<Weekday>() {
         Ok(wkdy) => wkdy.days_since(curr.weekday()),
-        Err(e) => {
+        Err(_e) => {
             // find a way to print error
             panic!("Invalid weekday");
         }

@@ -7,7 +7,7 @@ use serenity::framework::standard::CommandResult;
 use anyhow::Result;
 
 use chrono::{
-    DateTime, Datelike, Days, Duration, Local, Month, NaiveDate, NaiveTime, TimeDelta, Timelike, Utc, Weekday
+    DateTime, Datelike, Days, Duration, Local, Month, NaiveDate, NaiveTime, TimeDelta, TimeZone, Timelike, Weekday
 };
 use sqlx::{sqlite::SqliteQueryResult, Pool, Sqlite};
 
@@ -61,12 +61,10 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                     parse_duration(str).unwrap().as_secs()
                 }
             };
-            dbg!(format!("Duration: {:?}", dur));
 
             // construct timestamp
             let time = (current_date + TimeDelta::try_seconds(dur.try_into().unwrap()).unwrap())
                 .timestamp();
-            dbg!(time);
 
             time
         }
@@ -93,7 +91,7 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                             "am" => time_rem(num).await,
                             "st" | "nd" | "th" | "rd" => {
                                 single_date_case(
-                                    current_date.to_utc(),
+                                    current_date,
                                     date[..ind].parse::<u32>().unwrap(),
                                 )
                                 .await
@@ -114,7 +112,7 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                                     let num = casing[1][..i].parse::<u32>().unwrap();
                                     match &casing[1][i..] {
                                         "st" | "nd" | "th" | "rd" => {
-                                            single_date_case(current_date.to_utc(), num).await
+                                            single_date_case(current_date, num).await
                                         }
                                         _ => {
                                             let _ = err_reply(
@@ -171,6 +169,7 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
+    dbg!(timestamp);
     match add(task_name, timestamp, db.clone(), msg.author.id.get()).await {
         Ok(_) => {
             msg.reply(
@@ -214,7 +213,7 @@ async fn time_rem(time: u32) -> i64 {
     }
 }
 
-async fn single_date_case(curr: DateTime<Utc>, date: u32) -> i64 {
+async fn single_date_case(curr: DateTime<Local>, date: u32) -> i64 {
     if curr.day() > date {
         build_time(curr.month() + 1, date, {
             if curr.month() + 1 > 12 {
@@ -229,7 +228,7 @@ async fn single_date_case(curr: DateTime<Utc>, date: u32) -> i64 {
     }
 }
 
-async fn weekday(curr: DateTime<Utc>, week: &str, next: bool) -> i64 {
+async fn weekday(curr: DateTime<Local>, week: &str, next: bool) -> i64 {
     let weekday_dfm: u32 = match week.trim().parse::<Weekday>() {
         Ok(wkdy) => wkdy.days_since(curr.weekday()),
         Err(_e) => {
@@ -297,18 +296,17 @@ async fn interim_bt(m: Match<'_>, d: Match<'_>, y: Option<Match<'_>>) -> i64 {
 }
 
 async fn build_time(month: u32, day: u32, year: Option<i32>) -> i64 {
-    match year {
+    let init = match year {
         Some(val) => NaiveDate::from_ymd_opt(val, month, day)
             .unwrap()
             .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .timestamp(),
+            .unwrap(),
         None => NaiveDate::from_ymd_opt(
             {
-                if is_after(month, day, Utc::now().date_naive()) {
-                    Utc::now().year()
+                if is_after(month, day, Local::now().date_naive()) {
+                    Local::now().year()
                 } else {
-                    Utc::now().year() + 1
+                    Local::now().year() + 1
                 }
             },
             month,
@@ -316,9 +314,10 @@ async fn build_time(month: u32, day: u32, year: Option<i32>) -> i64 {
         )
         .unwrap()
         .and_hms_opt(0, 0, 0)
-        .unwrap()
-        .timestamp(),
-    }
+        .unwrap(),
+    };
+
+    Local.from_local_datetime(&init).unwrap().timestamp()
 }
 
 async fn err_reply(msg: &Message, ctx: &Context, err: &str) -> CommandResult {

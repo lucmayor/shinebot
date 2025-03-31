@@ -1,10 +1,8 @@
 ```
-	!do homework by friday (yes)
-	!do homework by 3pm (yes)
-	!do homework by next friday (YES)
+	!do homework by friday (yes yes)
+	!do homework by 3pm (yes yes)
+	!do homework by next friday (yes yes)
 	!do homework by the 3rd (yes)
-
-	(KINDA, DATE IS OFF CUZ OF UTC)
 	!do homework by 2024-03-25 (yes)
 	!do homework by 03-25 (yes)
 	!do homework by march 3rd (yes)
@@ -19,7 +17,7 @@
 	[date]-[date]-[None] // date
 	[date]-[date]-[date] // date
 	the [date] //date
-	[day of week] //date
+	[day of week] //dates
 	next [day of week] //date
 	[number][am/pm/rd/nd/th] // hours
 	[month (text)] [date][rd/nd/th]

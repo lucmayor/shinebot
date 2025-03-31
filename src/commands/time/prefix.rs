@@ -1,21 +1,22 @@
+use core::time;
+
 #[allow(unreachable_code)]
 use serenity::framework::standard::macros::command;
-use serenity::framework::standard::CommandResult;
 use serenity::model::channel::Message;
 use serenity::prelude::*;
+use serenity::{all::Command, framework::standard::CommandResult};
 
 use anyhow::Result;
 
-use chrono::{Datelike, Duration, Month, NaiveDate, TimeDelta, Utc, Weekday};
+use chrono::{
+    DateTime, Datelike, Days, Duration, Local, Month, NaiveDate, NaiveTime, TimeDelta, Timelike, Utc, Weekday
+};
 use sqlx::{sqlite::SqliteQueryResult, Pool, Sqlite};
 
 use crate::DatabaseContainer;
-
-use regex::{Captures, Regex};
-
-use text2num::{Language, replace_numbers_in_text};
-
-struct FixDate(i64);
+use humantime::parse_duration;
+use regex::{Captures, Match, Regex};
+use text2num::{replace_numbers_in_text, Language};
 
 trait MonthValidation {
     fn is_month(&self) -> bool;
@@ -34,33 +35,32 @@ impl MonthValidation for &str {
 #[aliases("todo", "do")]
 pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let input = &msg.content;
-    dbg!(input);
 
     let data = ctx.data.read().await;
-    let db = data.get::<DatabaseContainer>().expect("Couldn't find db");
+    let db = data
+        .get::<DatabaseContainer>()
+        .expect("Couldn't find the DB!");
 
-    let reg: Regex = Regex::new(r"(.?\!todo|!do)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
-    let captures: Captures<'_> = reg.captures(&input).unwrap();
+    let cmd_regex: Regex = Regex::new(r"(.?\!todo|!do)\s(.+?)\s+(by|in)\s+(.+)").unwrap();
+    let captures: Captures<'_> = cmd_regex.captures(&input).unwrap();
+
+    let task_name: &str = captures.get(2).unwrap().as_str();
     let operand: &str = captures.get(3).unwrap().as_str();
     let date: &str = captures.get(4).unwrap().as_str();
 
-    dbg!(format!("operand {} date {}", operand, date));
+    dbg!(format!("task {:?} date {:?}", task_name, date));
 
-    let current_date = Utc::now(); // implement the user
-                                   // this will need to be changed for implementation of timezone db
-                                   // presently checks for UTC
+    let current_date = Local::now();
 
-    let calc_timestamp: i64 = match operand {
+    let timestamp: i64 = match operand {
         "in" => {
-            let dur: u64 = match humantime::parse_duration(date) {
+            let dur: u64 = match parse_duration(date) {
                 Ok(res) => res.as_secs(),
                 Err(_) => {
+                    // don't have to err this but this is fine for now, replacenums just does shit without worry
                     let en = Language::english();
-                    let str: &str = &replace_numbers_in_text(date, &en, 10.0);
-                    dbg!(str);
-                    
-                    humantime::parse_duration(str).unwrap().as_secs()
-
+                    let str: &str = &replace_numbers_in_text(date, &en, 0.0);
+                    parse_duration(str).unwrap().as_secs()
                 }
             };
             dbg!(format!("Duration: {:?}", dur));
@@ -74,134 +74,112 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
         }
         "by" => {
             match date.chars().filter(|c| *c == ' ').count() {
-                0 => {
-                    let date_reg: Regex = Regex::new(r"(\d{4}|\d{2})-(\d{2})-?(\d{2})?").unwrap();
-                    let date_captures: Captures<'_> = date_reg.captures(&date).unwrap();
+                0 => match &date.parse::<Weekday>() {
+                    // basic weekday
+                    Ok(_) => weekday(current_date.into(), date, false).await,
+                    // full date
+                    Err(_) => {
+                        let (ind, _) = date.char_indices().rev().nth(1).expect({
+                            let _ = err_reply(msg, ctx, "Couldn't prompt the time/date");
+                            "Couldn't prompt time"
+                        });
 
-                    // case
-                    match date_captures.get(1).unwrap().as_str().chars().count() {
-                        4 => {
-                            let year: i32 = date_captures
-                                .get(1)
-                                .unwrap()
-                                .as_str()
-                                .parse::<i32>()
-                                .unwrap();
-                            let month: i32 = date_captures
-                                .get(2)
-                                .unwrap()
-                                .as_str()
-                                .parse::<i32>()
-                                .unwrap();
-                            let day: i32 = date_captures
-                                .get(3)
-                                .unwrap()
-                                .as_str()
-                                .parse::<i32>()
-                                .unwrap();
+                        // use 0 just because i don't care
+                        let num = match date[..ind].parse::<u32>() {
+                            Ok(i) => i,
+                            Err(_) => 0,
+                        };
 
-                            FixDate::from(build_date_str(year, month, day)).0
-                        }
-                        2 => {
-                            let month: i32 = date_captures
-                                .get(1)
-                                .unwrap()
-                                .as_str()
-                                .parse::<i32>()
-                                .unwrap();
-                            let day: i32 = date_captures
-                                .get(2)
-                                .unwrap()
-                                .as_str()
-                                .parse::<i32>()
-                                .unwrap();
-
-                            FixDate::from(build_date_str(
-                                {
-                                    if is_after(month as u32, day as u32, current_date.date_naive())
-                                    {
-                                        current_date.year()
-                                    } else {
-                                        current_date.year() + 1
-                                    }
-                                },
-                                month,
-                                day,
-                            ))
-                            .0
-                        }
-                        _ => {
-                            panic!("Regex failed.")
+                        match &date[ind..] {
+                            "pm" => time_rem(num + 12).await,
+                            "am" => time_rem(num).await,
+                            "st" | "nd" | "th" | "rd" => {
+                                single_date_case(
+                                    current_date.to_utc(),
+                                    date[..ind].parse::<u32>().unwrap(),
+                                )
+                                .await
+                            }
+                            _ => full_date(date).await,
                         }
                     }
-                }
+                },
                 1 => {
                     let casing: Vec<&str> = date.split(' ').collect();
 
                     match casing[0] {
-                        "this" | "the" | "next" => {
-                            let weekday_current: Weekday = current_date.weekday();
-
-                            let weekday_dfm: u32 = match casing[1].trim().parse::<Weekday>() {
-                                Ok(wkdy) => wkdy.days_since(weekday_current),
-                                Err(_) => panic!("Invalid weekday"),
-                            };
-
-                            (current_date
-                                + {
-                                    if casing[0] == "next" {
-                                        Duration::from(TimeDelta::days(7))
-                                    } else {
-                                        Duration::from(TimeDelta::days(0))
+                        "this" | "the" => {
+                            if let Ok(_) = casing[1].parse::<Weekday>() {
+                                weekday(current_date.into(), casing[1], false).await
+                            } else {
+                                if let Some((i, _)) = casing[1].char_indices().rev().nth(1) {
+                                    let num = casing[1][..i].parse::<u32>().unwrap();
+                                    match &casing[1][i..] {
+                                        "st" | "nd" | "th" | "rd" => {
+                                            single_date_case(current_date.to_utc(), num).await
+                                        }
+                                        _ => {
+                                            let _ = err_reply(
+                                                msg,
+                                                ctx,
+                                                "Bad suffix for time/date found",
+                                            );
+                                            panic!("Bad suffix for time/date found")
+                                        }
                                     }
+                                } else {
+                                    let _ = err_reply(
+                                        msg,
+                                        ctx,
+                                        "Bad general input for time/date found",
+                                    );
+                                    panic!("Bad general input for time/date found")
                                 }
-                                + Duration::from(TimeDelta::days(weekday_dfm.into())))
-                            .timestamp()
+                            }
                         }
+                        "next" => weekday(current_date.into(), casing[1], true).await,
                         mon_str if mon_str.is_month() => {
-                            // idk if this passes.
-                            let day = (&casing[1][..2]).parse::<i64>().expect("Invalid date");
+                            let mut day_init = casing[1].chars();
+                            if casing[1].len() >= 3 {
+                                day_init.next_back();
+                                day_init.next_back();
+                            }
+
+                            let day = day_init
+                                .as_str()
+                                .parse::<i32>()
+                                .expect("Failed day collection");
                             let mon = mon_str
                                 .parse::<Month>()
-                                .expect("Month parse failed after passing test");
+                                .expect("Month parse failed after passing precursor test");
 
-                            FixDate::from(build_date_str(
-                                {
-                                    if is_after(
-                                        mon.number_from_month(),
-                                        day as u32,
-                                        current_date.date_naive(),
-                                    ) {
-                                        current_date.year()
-                                    } else {
-                                        current_date.year() + 1
-                                    }
-                                },
-                                mon.number_from_month().try_into().unwrap(),
-                                day.try_into().unwrap(),
-                            ))
-                            .0
+                            build_time(mon.number_from_month(), day as u32, None).await
                         }
-                        _ => panic!("Invalid input for date!"),
+                        _ => {
+                            let _ = err_reply(msg, ctx, "Invalid input for date!").await;
+                            panic!("Invalid input for date")
+                        }
                     }
                 }
-                _ => panic!("Invalid input within date string"),
+                _ => {
+                    let _ = err_reply(msg, ctx, "Invalid input within date str!").await;
+                    panic!("Invalid input within date string.")
+                }
             }
         }
         _ => {
+            let _ = err_reply(msg, ctx, "Invalid operand for command.").await;
             panic!("Invalid operand for process.")
         }
     };
 
-    let task_name = captures.get(2).unwrap().as_str();
-
-    match add_item(task_name, calc_timestamp, db.clone(), msg.author.id.get()).await {
+    match add(task_name, timestamp, db.clone(), msg.author.id.get()).await {
         Ok(_) => {
             msg.reply(
                 &ctx.http,
                 format!(
                     "Added ({:?}, <t:{:?}>) to your to-do list!",
-                    task_name, calc_timestamp
+                    task_name, timestamp
                 ),
             )
             .await?;
@@ -211,7 +189,7 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
                 &ctx.http,
                 format!(
                     "Error adding ({:?}, <t:{:?}>) to your to-do list: {:?}",
-                    task_name, calc_timestamp, e
+                    task_name, timestamp, e
                 ),
             )
             .await?;
@@ -221,39 +199,135 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-impl From<String> for FixDate {
-    fn from(val: String) -> Self {
-        // String will take form {year}-{month}-{date}
-        let date_reg: Regex = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
-        let date_captures: Captures<'_> = date_reg.captures(&val).unwrap();
+async fn time_rem(time: u32) -> i64 {
+    let curr_time = Local::now();
+    if curr_time.time().hour() > time {
+        Local::now()
+            .checked_add_days(Days::new(1))
+            .unwrap()
+            .with_time(NaiveTime::from_hms_opt(time, 0, 0).expect("Failed to make naivetime"))
+            .unwrap()
+            .timestamp()
+    } else {
+        Local::now()
+            .with_time(NaiveTime::from_hms_opt(time, 0, 0).expect("Failed to make naivetime"))
+            .unwrap()
+            .timestamp()
+    }
+}
 
-        FixDate(
-            NaiveDate::from_ymd_opt(
-                date_captures
-                    .get(0)
-                    .unwrap()
-                    .as_str()
-                    .parse::<i32>()
-                    .unwrap(),
-                date_captures
-                    .get(1)
-                    .unwrap()
-                    .as_str()
-                    .parse::<u32>()
-                    .unwrap(),
-                date_captures
-                    .get(2)
-                    .unwrap()
-                    .as_str()
-                    .parse::<u32>()
-                    .unwrap(),
+async fn single_date_case(curr: DateTime<Utc>, date: u32) -> i64 {
+    if curr.day() > date {
+        build_time(curr.month() + 1, date, {
+            if curr.month() + 1 > 12 {
+                Some(curr.year() + 1)
+            } else {
+                Some(curr.year())
+            }
+        })
+        .await
+    } else {
+        build_time(curr.month(), date, Some(curr.year())).await
+    }
+}
+
+async fn weekday(curr: DateTime<Utc>, week: &str, next: bool) -> i64 {
+    let weekday_dfm: u32 = match week.trim().parse::<Weekday>() {
+        Ok(wkdy) => wkdy.days_since(curr.weekday()),
+        Err(e) => {
+            // find a way to print error
+            panic!("Invalid weekday");
+        }
+    };
+
+    (curr
+        + {
+            if next {
+                Duration::from(TimeDelta::days(7))
+            } else {
+                // need this else block apparently
+                Duration::from(TimeDelta::days(0))
+            }
+        }
+        + Duration::from(TimeDelta::days(weekday_dfm.into())))
+    .timestamp()
+}
+
+async fn full_date(date: &str) -> i64 {
+    let date_reg: Regex = Regex::new(r"(\d{4}|\d{2})-(\d{2}|\d{1})-?(\d{2}|\d{1})?").unwrap();
+    let date_captures: Captures<'_> = date_reg.captures(&date).unwrap();
+    dbg!(&date_captures);
+
+    match date_captures.get(1).unwrap().as_str().chars().count() {
+        // year, mon, day
+        4 => {
+            interim_bt(
+                date_captures.get(2).unwrap(),
+                date_captures.get(3).unwrap(),
+                Some(date_captures.get(1).unwrap()),
             )
+            .await
+        }
+        // mon, day
+        2 => {
+            interim_bt(
+                date_captures.get(1).unwrap(),
+                date_captures.get(2).unwrap(),
+                None,
+            )
+            .await
+        }
+        _ => {
+            // find a way to print error
+            panic!("Regex failed.");
+        }
+    }
+}
+
+async fn interim_bt(m: Match<'_>, d: Match<'_>, y: Option<Match<'_>>) -> i64 {
+    build_time(
+        m.as_str().parse::<u32>().unwrap(),
+        d.as_str().parse::<u32>().unwrap(),
+        {
+            match y {
+                Some(y) => Some(y.as_str().parse::<i32>().unwrap()),
+                None => None,
+            }
+        },
+    )
+    .await
+}
+
+async fn build_time(month: u32, day: u32, year: Option<i32>) -> i64 {
+    match year {
+        Some(val) => NaiveDate::from_ymd_opt(val, month, day)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap()
             .timestamp(),
+        None => NaiveDate::from_ymd_opt(
+            {
+                if is_after(month, day, Utc::now().date_naive()) {
+                    Utc::now().year()
+                } else {
+                    Utc::now().year() + 1
+                }
+            },
+            month,
+            day,
         )
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .timestamp(),
     }
+}
+
+async fn err_reply(msg: &Message, ctx: &Context, err: &str) -> CommandResult {
+    msg.reply(&ctx.http, format!("Error with `!todo`: {:?}", err))
+        .await?;
+
+    Ok(())
 }
 
 fn is_after(mon: u32, day: u32, current: NaiveDate) -> bool {
@@ -266,23 +340,19 @@ fn is_after(mon: u32, day: u32, current: NaiveDate) -> bool {
     }
 }
 
-fn build_date_str(year: i32, month: i32, day: i32) -> String {
-    year.to_string() + "-" + &month.to_string() + "-" + &day.to_string()
-}
-
-async fn add_item(
+async fn add(
     task: &str,
-    timestamp: i64,
+    ts: i64,
     db: Pool<Sqlite>,
-    user_id: u64,
+    uid: u64,
 ) -> Result<SqliteQueryResult, sqlx::Error> {
-    let conv = user_id as i64;
+    let conv = uid as i64;
     // this error is sometimes raised but it's just rust-analyzer tripping out
     sqlx::query!(
         r#"INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES (?1, ?2, ?3);"#,
         conv,
         task,
-        timestamp
+        ts
     )
     .execute(&db)
     .await

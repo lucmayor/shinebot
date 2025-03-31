@@ -6,17 +6,16 @@ use std::env;
 use std::sync::Arc;
 
 use serenity::all::standard::macros::group;
-use serenity::all::{Event, ResumedEvent, StandardFramework};
+use serenity::all::{ResumedEvent, StandardFramework};
 use serenity::framework::standard::Configuration;
 use serenity::gateway::ShardManager;
 use serenity::http::Http;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use serenity::async_trait;
-use tracing::{error, info};
+use tracing::info;
 
 use sqlx::{Pool, Sqlite};
-use tracing_subscriber::registry::Data;
 
 use crate::commands::meta::*;
 use crate::commands::owner::*;
@@ -39,7 +38,7 @@ impl TypeMapKey for DatabaseContainer {
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         let data = ctx.data.read().await;
-        let db = data.get::<DatabaseContainer>().expect("Database not found");
+        let _db = data.get::<DatabaseContainer>().expect("Database not found");
 
         println!("{} connected!", ready.user.name);
     }

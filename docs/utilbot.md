@@ -1,19 +1,14 @@
 ```
-	!do homework by friday
-	!do homework by 3pm
-	!do homework by next friday
-	!do homework by the 3rd
-	!do homework by 2024-03-25
-	!do homework by 03-25
-	!do homework by march 3rd
-	!do shit by friday
-	!do shit by next friday
-	!do shit by feb 2nd
-	!do shit by 2025-02-02
-	!do shit by 02-02
+	!do homework by friday (yes)
+	!do homework by 3pm (yes)
+	!do homework by next friday (YES)
+	!do homework by the 3rd (yes)
 
-	!do shit by the 4th
-	!do shit by monday
+	(KINDA, DATE IS OFF CUZ OF UTC)
+	!do homework by 2024-03-25 (yes)
+	!do homework by 03-25 (yes)
+	!do homework by march 3rd (yes)
+	!do homework by march 3 
 
 	the
 	this
@@ -52,4 +47,3 @@
 
 bugs:
 
-- i cant type numbers, must be int numeric state

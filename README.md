@@ -1,6 +1,6 @@
-## meowbot
+## shinebot
 
-utility bot specifically made for myself but has some applicability to others
+"_when i shine...!_" utility bot specifically made for myself but has some applicability to others
 
 ---
 

@@ -430,14 +430,14 @@ fn group_busses(bus_list: Vec<Bus>) -> Vec<(String, Times)> {
 fn build_response(busses: Vec<Bus>, alias: String) -> CreateEmbed {
     let mut final_list: Vec<String> = Vec::new();
     for item in group_busses(busses) {
-        final_list.push(format!("{:?}: {:?}", item.0, item.1.to_string()))
+        final_list.push(format!("{:}: {:}", item.0, item.1.to_string()))
     }
 
     let embed = CreateEmbed::new()
         .timestamp(TimestampSer::now())
         .title("bus schedule:")
         .colour(Colour::ROSEWATER)
-        .field(format!("route: {:?}", alias), final_list.join("\n"), false);
+        .field(format!("route: {:}", alias), final_list.join("\n"), false);
 
     embed
 }

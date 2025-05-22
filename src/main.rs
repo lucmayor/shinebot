@@ -3,26 +3,32 @@ mod commands;
 
 use std::collections::HashSet;
 use std::env;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::Duration;
 
 use serenity::all::standard::macros::group;
-use serenity::all::{ResumedEvent, StandardFramework};
+use serenity::all::{GuildId, ResumedEvent, StandardFramework};
+use serenity::async_trait;
 use serenity::framework::standard::Configuration;
 use serenity::gateway::ShardManager;
 use serenity::http::Http;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
-use serenity::async_trait;
 use tracing::info;
 
 use sqlx::{Pool, Sqlite};
 
+use crate::commands::bus::prefix::*;
 use crate::commands::meta::*;
 use crate::commands::owner::*;
-use crate::commands::bus::prefix::*;
 use crate::commands::time::prefix::*; // this isn't how you're supposed to do it, fix l8r
 
-struct Handler;
+struct Handler {
+    loop_status: AtomicBool,
+}
 
 pub struct ShardManagerContainer;
 pub struct DatabaseContainer;
@@ -46,6 +52,33 @@ impl EventHandler for Handler {
 
     async fn resume(&self, _: Context, _: ResumedEvent) {
         info!("Resumed");
+    }
+
+    async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
+        println!("Cache built");
+
+        let ctx = Arc::new(ctx);
+
+        if !self.loop_status.load(Ordering::Relaxed) {
+
+            // thread to handle reminders
+            let ctx1 = Arc::clone(&ctx);
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                }
+            });
+
+            // thread to handle updating the personal file for reminders
+            let ctx2 = Arc::clone(&ctx);
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                }
+            });
+
+            self.loop_status.swap(true, Ordering::Relaxed);
+        }
     }
 }
 
@@ -98,7 +131,9 @@ async fn main() {
     // might have to undo that addressing
     let mut client = Client::builder(&token, intents)
         .framework(framework)
-        .event_handler(Handler)
+        .event_handler(Handler {
+            loop_status: AtomicBool::new(false),
+        })
         .await
         .expect("Error in client creation.");
 
@@ -117,4 +152,13 @@ async fn main() {
     if let Err(err_msg) = client.start().await {
         println!("Client error: {err_msg:?}");
     }
+}
+
+// method to do the reminder part
+// move this to the /time/ part
+async fn check_reminders(ctx: Context) {
+    // currently errors out -- fix later
+    // essentially just query, check for before timestamps, send message + kill instance
+    
+    //let Ok(reminder_data) = sqlx::query!("SELECT user_id, task_desc, time_stamp FROM tasks WHERE time_stamp");
 }

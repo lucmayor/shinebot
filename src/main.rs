@@ -76,7 +76,10 @@ impl EventHandler for Handler {
             let ctx1 = Arc::clone(&ctx);
             tokio::spawn(async move {
                 loop {
-                    dbg!(format!("TASK: Checking reminders before timestamp {:?}", Local::now()));
+                    dbg!(format!(
+                        "TASK: Checking reminders before timestamp {:?}",
+                        Local::now()
+                    ));
                     let _ = check_reminders(&ctx1).await;
                     tokio::time::sleep(Duration::from_secs(30)).await;
                 }
@@ -210,16 +213,6 @@ async fn check_reminders(ctx: &Context) -> Result<()> {
         }
     }
 
-    if let Err(why) = sqlx::query!("DELETE FROM tasks WHERE time_stamp <= ?", curr)
-        .execute(conn)
-        .await
-    {
-        dbg!(format!(
-            "ERROR: Failed to delete tasks for timestamp {:?}: {:?}",
-            curr, why
-        ));
-    };
-
     // there is 100% a better way about this
     // this might be a very expensive manner of approaching this
     for fails in failed {
@@ -233,6 +226,25 @@ async fn check_reminders(ctx: &Context) -> Result<()> {
         .execute(conn)
         .await;
     }
+
+    let _ = sqlx::query!(
+        "INSERT INTO completed (taskid, user_id, task_desc, time_stamp)
+        SELECT taskid, user_id, task_desc, time_stamp FROM tasks WHERE time_stamp <= ?
+        EXCEPT SELECT taskid, user_id, task_desc, time_stamp FROM failed",
+        curr
+    )
+    .execute(conn)
+    .await;
+
+    if let Err(why) = sqlx::query!("DELETE FROM tasks WHERE time_stamp <= ?", curr)
+        .execute(conn)
+        .await
+    {
+        dbg!(format!(
+            "ERROR: Failed to delete tasks for timestamp {:?}: {:?}",
+            curr, why
+        ));
+    };
 
     Ok(())
 }

@@ -12,3 +12,10 @@ CREATE TABLE failed (
     task_desc TEXT NOT NULL,
     time_stamp INTEGER NOT NULL
 );
+
+CREATE TABLE completed (
+    taskid INTEGER NOT NULL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    task_desc TEXT NOT NULL,
+    time_stamp INTEGER NOT NULL
+);

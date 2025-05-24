@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO failed (taskid, user_id, task_desc, time_stamp) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "745040f5c214eb5c933ba33fd972301e60c4aa70916d48b82460ac8a1574e945"
+}

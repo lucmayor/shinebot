@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM tasks WHERE time_stamp <= ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "5794bdcbf4899ef03bb98cb767ea7eb7b2b1f8d4f81ad65a39c353049b35f1d6"
+}

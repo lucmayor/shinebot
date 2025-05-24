@@ -9,17 +9,22 @@ use std::sync::{
 };
 use std::time::Duration;
 
+use anyhow::{Error, Result};
+
+use chrono::Local;
 use serenity::all::standard::macros::group;
-use serenity::all::{GuildId, ResumedEvent, StandardFramework};
+use serenity::all::{CreateMessage, GuildId, ResumedEvent, StandardFramework, UserId};
 use serenity::async_trait;
 use serenity::framework::standard::Configuration;
 use serenity::gateway::ShardManager;
 use serenity::http::Http;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
+use sqlx::sqlite::SqliteQueryResult;
 use tracing::info;
 
-use sqlx::{Pool, Sqlite};
+use sqlx::{Database, Pool, Sqlite};
+use tracing_subscriber::registry::Data;
 
 use crate::commands::bus::prefix::*;
 use crate::commands::meta::*;
@@ -28,6 +33,13 @@ use crate::commands::time::prefix::*; // this isn't how you're supposed to do it
 
 struct Handler {
     loop_status: AtomicBool,
+}
+
+struct Record {
+    taskid: i64,
+    user_id: i64,
+    task_desc: String,
+    time_stamp: i64,
 }
 
 pub struct ShardManagerContainer;
@@ -60,22 +72,23 @@ impl EventHandler for Handler {
         let ctx = Arc::new(ctx);
 
         if !self.loop_status.load(Ordering::Relaxed) {
-
             // thread to handle reminders
             let ctx1 = Arc::clone(&ctx);
             tokio::spawn(async move {
                 loop {
+                    dbg!(format!("TASK: Checking reminders before timestamp {:?}", Local::now()));
+                    let _ = check_reminders(&ctx1).await;
                     tokio::time::sleep(Duration::from_secs(30)).await;
                 }
             });
 
             // thread to handle updating the personal file for reminders
-            let ctx2 = Arc::clone(&ctx);
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(Duration::from_secs(60)).await;
-                }
-            });
+            // let ctx2 = Arc::clone(&ctx);
+            // tokio::spawn(async move {
+            //     loop {
+            //         tokio::time::sleep(Duration::from_secs(60)).await;
+            //     }
+            // });
 
             self.loop_status.swap(true, Ordering::Relaxed);
         }
@@ -126,6 +139,7 @@ async fn main() {
 
     let intents = GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::GUILDS
         | GatewayIntents::GUILD_MESSAGES;
 
     // might have to undo that addressing
@@ -156,9 +170,69 @@ async fn main() {
 
 // method to do the reminder part
 // move this to the /time/ part
-async fn check_reminders(ctx: Context) {
-    // currently errors out -- fix later
-    // essentially just query, check for before timestamps, send message + kill instance
-    
-    //let Ok(reminder_data) = sqlx::query!("SELECT user_id, task_desc, time_stamp FROM tasks WHERE time_stamp");
+async fn check_reminders(ctx: &Context) -> Result<()> {
+    let data = ctx.data.read().await;
+    let conn = data.get::<DatabaseContainer>().expect("DB not found");
+
+    let curr = Local::now().timestamp();
+    let reminder_data = sqlx::query!(
+        "SELECT taskid, user_id, task_desc, time_stamp FROM tasks WHERE time_stamp <= ? 
+        EXCEPT SELECT taskid, user_id, task_desc, time_stamp FROM failed",
+        curr
+    )
+    .fetch_all(conn)
+    .await?;
+
+    let mut failed: Vec<Record> = Vec::new();
+
+    for record in reminder_data {
+        let exp_user = UserId::new(record.user_id as u64);
+        let build = CreateMessage::new().content(format!(
+            "<t:{:?}> : {:?} elapsed <t:{:?}:R>.",
+            record.time_stamp, record.task_desc, record.time_stamp
+        ));
+
+        if let Err(what) = exp_user.direct_message(&ctx, build).await {
+            dbg!(format!(
+                "ERROR: Failed to send reminder to user {:?} for timestamp {:?} with message {:?}: {:?}",
+                record.user_id, record.time_stamp, record.task_desc, what
+            ));
+
+            // maybe can add a from impl for Record
+            // but would probably need to add to the actual sqlx query if anything
+            failed.push(Record {
+                taskid: record.taskid,
+                user_id: record.user_id,
+                task_desc: record.task_desc,
+                time_stamp: record.time_stamp,
+            });
+            // can add error response here later, flesh out rest first
+        }
+    }
+
+    if let Err(why) = sqlx::query!("DELETE FROM tasks WHERE time_stamp <= ?", curr)
+        .execute(conn)
+        .await
+    {
+        dbg!(format!(
+            "ERROR: Failed to delete tasks for timestamp {:?}: {:?}",
+            curr, why
+        ));
+    };
+
+    // there is 100% a better way about this
+    // this might be a very expensive manner of approaching this
+    for fails in failed {
+        let _ = sqlx::query!(
+            "INSERT INTO failed (taskid, user_id, task_desc, time_stamp) VALUES (?, ?, ?, ?)",
+            fails.taskid,
+            fails.user_id,
+            fails.task_desc,
+            fails.time_stamp
+        )
+        .execute(conn)
+        .await;
+    }
+
+    Ok(())
 }

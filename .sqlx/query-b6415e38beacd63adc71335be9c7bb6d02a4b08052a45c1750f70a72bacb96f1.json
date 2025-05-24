@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT taskid, user_id, task_desc, time_stamp FROM tasks WHERE time_stamp <= ? \n        EXCEPT SELECT taskid, user_id, task_desc, time_stamp FROM failed",
+  "describe": {
+    "columns": [
+      {
+        "name": "taskid",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "task_desc",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "time_stamp",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b6415e38beacd63adc71335be9c7bb6d02a4b08052a45c1750f70a72bacb96f1"
+}

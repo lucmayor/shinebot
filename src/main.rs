@@ -9,7 +9,7 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 
 use chrono::Local;
 use serenity::all::standard::macros::group;
@@ -20,11 +20,9 @@ use serenity::gateway::ShardManager;
 use serenity::http::Http;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
-use sqlx::sqlite::SqliteQueryResult;
 use tracing::info;
 
-use sqlx::{Database, Pool, Sqlite};
-use tracing_subscriber::registry::Data;
+use sqlx::{Pool, Sqlite};
 
 use crate::commands::bus::prefix::*;
 use crate::commands::meta::*;
@@ -59,7 +57,7 @@ impl EventHandler for Handler {
         let data = ctx.data.read().await;
         let _db = data.get::<DatabaseContainer>().expect("Database not found");
 
-        println!("{} connected!", ready.user.name);
+        println!("STATUS: {} connected!", ready.user.name);
     }
 
     async fn resume(&self, _: Context, _: ResumedEvent) {
@@ -67,7 +65,7 @@ impl EventHandler for Handler {
     }
 
     async fn cache_ready(&self, ctx: Context, _guilds: Vec<GuildId>) {
-        println!("Cache built");
+        println!("STATUS: Cache built");
 
         let ctx = Arc::new(ctx);
 
@@ -76,16 +74,18 @@ impl EventHandler for Handler {
             let ctx1 = Arc::clone(&ctx);
             tokio::spawn(async move {
                 loop {
-                    dbg!(format!(
+                    println!(
                         "TASK: Checking reminders before timestamp {:?}",
                         Local::now()
-                    ));
+                    );
                     let _ = check_reminders(&ctx1).await;
                     tokio::time::sleep(Duration::from_secs(30)).await;
                 }
             });
 
             // thread to handle updating the personal file for reminders
+            // not implemented yet, not spawning this thread yet
+
             // let ctx2 = Arc::clone(&ctx);
             // tokio::spawn(async move {
             //     loop {
@@ -172,15 +172,19 @@ async fn main() {
 }
 
 // method to do the reminder part
-// move this to the /time/ part
+// move this to the /time/ part if you can
 async fn check_reminders(ctx: &Context) -> Result<()> {
     let data = ctx.data.read().await;
     let conn = data.get::<DatabaseContainer>().expect("DB not found");
+    let mut failflag = false;
 
     let curr = Local::now().timestamp();
     let reminder_data = sqlx::query!(
-        "SELECT taskid, user_id, task_desc, time_stamp FROM tasks WHERE time_stamp <= ? 
-        EXCEPT SELECT taskid, user_id, task_desc, time_stamp FROM failed",
+        "SELECT taskid, user_id, task_desc, time_stamp 
+        FROM tasks 
+        WHERE time_stamp <= ?
+        AND status = 'PENDING'
+        AND type = 'in'",
         curr
     )
     .fetch_all(conn)
@@ -201,6 +205,8 @@ async fn check_reminders(ctx: &Context) -> Result<()> {
                 record.user_id, record.time_stamp, record.task_desc, what
             ));
 
+            failflag = true;
+
             // maybe can add a from impl for Record
             // but would probably need to add to the actual sqlx query if anything
             failed.push(Record {
@@ -217,34 +223,26 @@ async fn check_reminders(ctx: &Context) -> Result<()> {
     // this might be a very expensive manner of approaching this
     for fails in failed {
         let _ = sqlx::query!(
-            "INSERT INTO failed (taskid, user_id, task_desc, time_stamp) VALUES (?, ?, ?, ?)",
-            fails.taskid,
-            fails.user_id,
-            fails.task_desc,
-            fails.time_stamp
+            "UPDATE tasks SET status = 'FAILED' WHERE taskid = ?",
+            fails.taskid
         )
         .execute(conn)
         .await;
     }
 
     let _ = sqlx::query!(
-        "INSERT INTO completed (taskid, user_id, task_desc, time_stamp)
-        SELECT taskid, user_id, task_desc, time_stamp FROM tasks WHERE time_stamp <= ?
-        EXCEPT SELECT taskid, user_id, task_desc, time_stamp FROM failed",
+        "UPDATE tasks 
+        SET status = 'SENT' 
+        WHERE time_stamp <= ? 
+        AND status != 'FAILED'",
         curr
     )
     .execute(conn)
     .await;
 
-    if let Err(why) = sqlx::query!("DELETE FROM tasks WHERE time_stamp <= ?", curr)
-        .execute(conn)
-        .await
-    {
-        dbg!(format!(
-            "ERROR: Failed to delete tasks for timestamp {:?}: {:?}",
-            curr, why
-        ));
-    };
+    let _ = sqlx::query!("INSERT INTO stats (ts, fails) VALUES (?1, ?2)", curr, failflag)
+    .execute(conn)
+    .await;
 
     Ok(())
 }

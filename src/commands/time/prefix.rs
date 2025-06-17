@@ -30,7 +30,7 @@ impl MonthValidation for &str {
 }
 
 #[command]
-#[aliases("todo", "do")]
+#[aliases("todo", "do", "remind", "rem")] // open to multiple
 pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
     let input = &msg.content;
 
@@ -169,8 +169,7 @@ pub async fn todo(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    dbg!(timestamp);
-    match add(task_name, timestamp, db.clone(), msg.author.id.get()).await {
+    match add(task_name, timestamp, db.clone(), msg.author.id.get(), operand).await {
         Ok(_) => {
             msg.reply(
                 &ctx.http,
@@ -342,14 +341,17 @@ async fn add(
     ts: i64,
     db: Pool<Sqlite>,
     uid: u64,
+    task_type: &str
 ) -> Result<SqliteQueryResult, sqlx::Error> {
     let conv = uid as i64;
     // this error is sometimes raised but it's just rust-analyzer tripping out
     sqlx::query!(
-        r#"INSERT INTO tasks (user_id, task_desc, time_stamp) VALUES (?1, ?2, ?3);"#,
+        r#"INSERT INTO tasks (user_id, task_desc, time_stamp, type, status) VALUES (?1, ?2, ?3, ?4, ?5);"#,
         conv,
         task,
-        ts
+        ts,
+        task_type,
+        "PENDING"
     )
     .execute(&db)
     .await

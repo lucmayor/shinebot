@@ -103,7 +103,7 @@ struct BusList {
 
 #[derive(Clone)]
 enum BusType {
-    Integer(u8),
+    Integer(u16),
     String(String),
 }
 
@@ -190,35 +190,28 @@ impl std::str::FromStr for BusStop {
                 alias: s.to_string(),
                 stop_number: 10102,
                 busses_wanted: BusList {
-                    busses_wanted: [BusType::Integer(36)].to_vec(),
+                    busses_wanted: [BusType::Integer(889)].to_vec(),
                 },
             }),
             "corydon_east" => Ok(BusStop {
                 alias: s.to_string(),
                 stop_number: 60316,
                 busses_wanted: BusList {
-                    busses_wanted: [BusType::Integer(18)].to_vec(),
+                    busses_wanted: [BusType::String("D19".to_owned())].to_vec(),
                 },
             }),
             "waverly_south" => Ok(BusStop {
                 alias: s.to_string(),
                 stop_number: 60306,
                 busses_wanted: BusList {
-                    busses_wanted: [BusType::Integer(78)].to_vec(),
+                    busses_wanted: [BusType::Integer(688)].to_vec(),
                 },
             }),
             "university_one" => Ok(BusStop {
                 alias: s.to_string(),
-                stop_number: 60674,
-                busses_wanted: BusList {
-                    busses_wanted: [BusType::Integer(36)].to_vec(),
-                },
-            }),
-            "university_two" => Ok(BusStop {
-                alias: s.to_string(),
                 stop_number: 60673,
                 busses_wanted: BusList {
-                    busses_wanted: [BusType::Integer(78)].to_vec(),
+                    busses_wanted: [BusType::Integer(889)].to_vec(),
                 },
             }),
             "agriculture_stop" => Ok(BusStop {
@@ -226,8 +219,8 @@ impl std::str::FromStr for BusStop {
                 stop_number: 60105,
                 busses_wanted: BusList {
                     busses_wanted: [
-                        BusType::Integer(36),
-                        BusType::Integer(78),
+                        BusType::Integer(668),
+                        BusType::Integer(889),
                         BusType::String("BLUE".to_owned()),
                     ]
                     .to_vec(),
@@ -238,13 +231,6 @@ impl std::str::FromStr for BusStop {
                 stop_number: 60675,
                 busses_wanted: BusList {
                     busses_wanted: [BusType::String("BLUE".to_owned())].to_vec(),
-                },
-            }),
-            "downtown_rwb_west" => Ok(BusStop {
-                alias: s.to_string(),
-                stop_number: 10617,
-                busses_wanted: BusList {
-                    busses_wanted: [BusType::Integer(18)].to_vec(),
                 },
             }),
             _ => Err(LocError::Other),

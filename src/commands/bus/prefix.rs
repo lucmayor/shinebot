@@ -144,29 +144,35 @@ impl std::str::FromStr for StopCollection {
         let mut temp: Vec<BusStop> = Vec::new();
 
         let busses: Vec<BusStop> = match s {
+            // to uni
             "university" | "uni" => {
                 temp.push(BusStop::from_str("stafford_south").unwrap());
                 temp.push(BusStop::from_str("waverly_south").unwrap());
 
                 temp
             }
+            // to home, from uni
             "home_uni" => {
                 temp.push(BusStop::from_str("university_one").unwrap());
                 temp.push(BusStop::from_str("university_two").unwrap());
 
                 temp
             }
-            "home_bus" => {
-                temp.push(BusStop::from_str("university_one").unwrap());
+            // from home / to downtown
+            // weird naming
+            "dt" | "home" => {
+                temp.push(BusStop::from_str("corydon_east").unwrap());
 
                 temp
             }
-            "ryan" => {
+            // park and ride
+            "ryan" | "blue" => {
                 temp.push(BusStop::from_str("university_blue").unwrap());
 
                 temp
             }
-            "late" => {
+            // running late, agri stop
+            "late" | "agri" => {
                 temp.push(BusStop::from_str("agriculture_stop").unwrap());
 
                 temp

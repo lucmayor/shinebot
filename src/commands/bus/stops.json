@@ -1,0 +1,101 @@
+{
+    "stops": [
+        {
+            "alias": "stafford_south",
+            "stop_number": 10102,
+            "busses": [
+                "889"
+            ]
+        },
+        {
+            "alias": "corydon_east",
+            "stop_number": 60316,
+            "busses": [
+                "D19"
+            ]
+        },
+        {
+            "alias": "waverly_south",
+            "stop_number": 60306,
+            "busses": [
+                "668"
+            ]
+        },
+        {
+            "alias": "university_one",
+            "stop_number": 60673,
+            "busses": [
+                "889"
+            ]
+        },
+        {
+            "alias": "agriculture_stop",
+            "stop_number": 60105,
+            "busses": [
+                "668",
+                "889",
+                "BLUE"
+            ]
+        },
+        {
+            "alias": "university_blue",
+            "stop_number": 60675,
+            "busses": [
+                "BLUE"
+            ]
+        }
+    ],
+    "groups": [
+        {
+            "id": 0,
+            "alias": [
+                "uni",
+                "university"
+            ],
+            "stops": [
+                "stafford_south",
+                "waverly_south"
+            ]
+        },
+        {
+            "id": 1,
+            "alias": [
+                "home_uni"
+            ],
+            "stops": [
+                "university_one",
+                "university_two"
+            ]
+        },
+        {
+            "id": 2,
+            "alias": [
+                "dt",
+                "home"
+            ],
+            "stops": [
+                "corydon_east"
+            ]
+        },
+        {
+            "id": 3,
+            "alias": [
+                "ryan",
+                "blue"
+            ],
+            "stops": [
+                "university_blue"
+            ]
+        },
+        {
+            "id": 4,
+            "alias": [
+                "late",
+                "agri"
+            ],
+            "stops": [
+                "agriculture_stop"
+            ]
+        }
+    ]
+}

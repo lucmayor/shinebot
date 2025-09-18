@@ -99,7 +99,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(todo, bus, ping, quit)]
+#[commands(todo, bus, roll, choose, ping, quit)]
 struct General;
 
 // have to specify flavor for whatever reason

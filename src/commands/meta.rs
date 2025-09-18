@@ -31,17 +31,24 @@ async fn roll(ctx: &Context, msg: &Message) -> CommandResult {
         .split(' ')
         .map(|x| x.trim().to_string())
         .collect();
+
     let roll_bound = {
-        if let Ok(num) = input[0].parse::<i64>() {
-            num
+        if input.len() > 1 {
+            if let Ok(num) = input[1].parse::<i64>() {
+                num
+            } else {
+                100
+            }
         } else {
             100
         }
     };
 
-    let mut rng = rand::rng();
-    let rand: f64 = rng.random::<f64>() * roll_bound as f64;
-    let res: i64 = ((rand / 100_000.0).round() as i64) * 100_000;
+    let rand: f64 = {
+        let mut rng = rand::rng();
+        rng.random::<f64>() * roll_bound as f64
+    };
+    let res: i64 = rand.round() as i64;
 
     // dubs check, trips check, etc...
     let disection: Vec<char> = res.to_string().chars().collect();
@@ -65,49 +72,63 @@ async fn roll(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
+    // can be shortened do this whenever
     let len_check: i64 = (&disection).len() as i64;
     let combo_str: String = {
-        if combo_res {
-            if init_char == '1' {
-                match len_check {
-                    3 => {"dubs!!".to_owned()},
-                    4 => {"trips!!!".to_owned()},
-                    5 => {"quads!!!!".to_owned()},
-                    _ => {"big number!!!!!".to_owned()}
+        if len_check == 1 {
+            "".to_owned()
+        } else {
+            if combo_res {
+                if init_char == '1' {
+                    match len_check {
+                        3 => "dubs!!".to_owned(),
+                        4 => "trips!!!".to_owned(),
+                        5 => "quads!!!!".to_owned(),
+                        _ => "big number!!!!!".to_owned(),
+                    }
+                } else {
+                    match len_check {
+                        2 => "dubs!!".to_owned(),
+                        3 => "trips!!!".to_owned(),
+                        4 => "quads!!!!".to_owned(),
+                        _ => "big number!!!!!".to_owned(),
+                    }
                 }
             } else {
-                match len_check {
-                    2 => {"dubs!!".to_owned()},
-                    3 => {"trips!!!".to_owned()},
-                    4 => {"quads!!!!".to_owned()},
-                    _ => {"big number!!!!!".to_owned()}
-                }
+                "".to_owned()
             }
-        } else {
-            "".to_owned()
         }
     };
 
-    msg.channel_id.say(&ctx.http, format!("{} ... {}", res, combo_str)).await?;
+    msg.channel_id
+        .say(&ctx.http, format!("{} ... {}", res, combo_str))
+        .await?;
 
-    todo!()
+    Ok(())
 }
 
-// #[command]
-// async fn choose(ctx: &Context, msg: &Message) -> CommandResult {
-//     let input: Vec<String> = msg
-//         .content
-//         .split('|')
-//         .map(|x| x.trim().to_string())
-//         .collect();
-//     let mut rng = rand::thread_rng();
+#[command]
+async fn choose(ctx: &Context, msg: &Message) -> CommandResult {
+    let mut input: Vec<String> = msg
+        .content
+        .split('|')
+        .map(|x| x.trim().to_string())
+        .collect();
 
-//     let res = match input.choose(&mut rng) {
-//         Some(x) => x,
-//         None => "failed",
-//     };
+    // hacky, but trims leading cmd string
+    input[0] = input[0].split(' ').collect::<Vec<&str>>()[1]
+        .trim()
+        .to_string();
 
-//     msg.channel_id.say(&ctx.http, format!("{:?}", res)).await?;
+    let res = match {
+        let mut rng = rand::thread_rng();
+        input.choose(&mut rng)
+    } {
+        Some(x) => x,
+        None => "failed",
+    };
 
-//     Ok(())
-// }
+    msg.channel_id.say(&ctx.http, format!("{:?}", res)).await?;
+
+    Ok(())
+}

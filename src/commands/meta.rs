@@ -18,7 +18,10 @@ async fn help(ctx: &Context, msg: &Message) -> CommandResult {
             &ctx.http,
             "current commands: 
                                 \n!todo - Sets reminder in database to do task.
-                                \n!bus - Gives bus times relative to provided WT stop grouping.",
+                                \n!bus - Gives bus times relative to provided WT stop grouping.
+                                \n!choose - Chooses between options.
+                                \n!roll - Roll a number.
+                                \n!np - Show listening status (sourced from last.fm).",
         )
         .await?;
     Ok(())

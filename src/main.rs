@@ -28,6 +28,7 @@ use crate::commands::bus::prefix::*;
 use crate::commands::meta::*;
 use crate::commands::owner::*;
 use crate::commands::time::prefix::*; // this isn't how you're supposed to do it, fix l8r
+use crate::commands::music::prefix::*;
 
 struct Handler {
     loop_status: AtomicBool,
@@ -99,7 +100,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(todo, bus, roll, choose, ping, quit)]
+#[commands(todo, bus, roll, choose, ping, np, setlfm, quit)]
 struct General;
 
 // have to specify flavor for whatever reason

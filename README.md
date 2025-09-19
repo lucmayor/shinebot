@@ -14,6 +14,10 @@ Intended for personal use, but has some vague flexibility for other users planne
 !help - Gives you this list of commands.
 !todo - Sets reminder in database to do task.
 !bus - Gives bus times relative to provided WT stop grouping.
+!choose - Chooses between options.
+!roll - Roll a number.
+!np - Show listening status (sourced from last.fm).
+
 !ping - Basic check for response.
 ```
 

@@ -29,6 +29,7 @@ use crate::commands::meta::*;
 use crate::commands::owner::*;
 use crate::commands::time::prefix::*; // this isn't how you're supposed to do it, fix l8r
 use crate::commands::music::prefix::*;
+use crate::commands::roll::prefix::*;
 
 struct Handler {
     loop_status: AtomicBool,
